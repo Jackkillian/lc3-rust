@@ -15,6 +15,7 @@ use hardware::{
 use std::{
     fs,
     io::{self, Cursor, Write},
+    path::Path,
     time::Duration,
 };
 
@@ -86,6 +87,22 @@ fn update_flags(reg: Registers, register_data: &mut EnumMap<Registers, u16>) {
     }
 }
 
+fn read_to_mem(path: &str, memory_data: &mut Vec<u16>) -> u16 {
+    let data: Vec<u8> = fs::read(path).unwrap();
+    let mut cursor = Cursor::new(data);
+
+    let origin = cursor.read_u16::<BigEndian>().unwrap();
+
+    // read the program into memory
+    let mut address = origin;
+    while let Ok(word) = cursor.read_u16::<BigEndian>() {
+        memory_data[address as usize] = word;
+        address += 1;
+    }
+
+    origin
+}
+
 fn main() {
     enable_raw_mode().unwrap();
     let _guard = RawModeGuard; // when this gets dropped, raw mode is disabled (including on panic)
@@ -100,21 +117,7 @@ fn main() {
     // let mut memory_data: [u16; MEM_SIZE as usize] = [];
     // let mut memory_data: Vec<u16> = Vec::with_capacity(MEM_SIZE as usize);
     let mut memory_data: Vec<u16> = vec![0; MEM_SIZE as usize];
-
-    // let data: Vec<u8> = fs::read("src-lc3/helloworld.obj").unwrap();
-    // let data: Vec<u8> = fs::read("src-lc3/input.obj").unwrap();
-    let data: Vec<u8> = fs::read("src-lc3/rogue.obj").unwrap();
-    let mut cursor = Cursor::new(data);
-
-    let origin = cursor.read_u16::<BigEndian>().unwrap();
-    register_data[Registers::RProgramCounter] = origin;
-
-    // read the program into memory
-    let mut address = origin;
-    while let Ok(word) = cursor.read_u16::<BigEndian>() {
-        memory_data[address as usize] = word;
-        address += 1;
-    }
+    register_data[Registers::RProgramCounter] = read_to_mem("prog/2048.obj", &mut memory_data);
 
     // for (key, &value) in &register_data {
     //     print!("{:?} has {} as value.\r\n", key, value);
