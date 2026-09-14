@@ -15,7 +15,6 @@ use hardware::{
 use std::{
     env, fs,
     io::{self, Cursor, Write},
-    path::Path,
     process::exit,
     time::Duration,
 };
