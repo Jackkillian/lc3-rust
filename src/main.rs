@@ -91,12 +91,12 @@ fn main() {
             register_data[Registers::RProgramCounter] = pc.wrapping_add(1);
             memory_data[pc as usize]
         };
-        let opcode_val = (op_data >> 12) as u8; // op code is the first 4 bits of a 16-bit word
 
         // both of these should get rid of the first 4 bits
         // let opcode_args = (op_data & OP_ARG_MASK) as u16;
         // let opcode_args = ((op_data << 4) >> 4) as u16;
 
+        let opcode_val = (op_data >> 12) as u8; // op code is the first 4 bits of a 16-bit word
         let op = OpCodes::try_from(opcode_val).unwrap();
 
         // print!(
@@ -108,13 +108,10 @@ fn main() {
         match op {
             OpCodes::OpBR => {
                 // branch
-                // println!("BRANCH");
                 let n = (op_data & 0b0000_1000_0000_0000) != 0;
                 let z = (op_data & 0b0000_0100_0000_0000) != 0;
                 let p = (op_data & 0b0000_0010_0000_0000) != 0;
                 let pc_offset = sign_extend(op_data & 0b0000_0001_1111_1111, 9) as i16;
-
-                // println!("N, Z, P, OFFSET: {}, {}, {}, {}", n, z, p, pc_offset);
 
                 // NOTE: this should never throw because this is always set to a flag value
                 let condition_flag = CondFlags::try_from(register_data[Registers::RCond]).unwrap();
@@ -297,9 +294,8 @@ fn main() {
                                 }
                                 io::stdout().flush().unwrap();
                             }
-                            _ => {
-                                panic!("UNKNOWN TRAP CALL {:#06}\r\n", trapvect8);
-                            }
+                            TrapCall::IN => todo!(),
+                            TrapCall::PUTSP => todo!(),
                         }
                     }
                     Err(e) => {
@@ -393,9 +389,8 @@ fn main() {
                 // positive
                 memory_data[base_reg_data.wrapping_add(offset6 as u16) as usize] = final_reg_data;
             }
-            _ => {
-                panic!("UNKNOWN OP CODE {:?}\r\n", op);
-            }
+            OpCodes::OpRTI => todo!(),
+            OpCodes::OpRES => todo!(),
         }
     }
 
