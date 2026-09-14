@@ -330,6 +330,7 @@ fn main() {
                                     }
                                     pointer = pointer.wrapping_add(1);
                                 }
+                                io::stdout().flush().unwrap();
                             }
                             _ => {
                                 panic!("UNKNOWN TRAP CALL {:#06}\r\n", trapvect8);
