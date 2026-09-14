@@ -22,20 +22,16 @@ impl Drop for RawModeGuard {
     }
 }
 
-fn read_to_mem(path: &str, memory_data: &mut Vec<u16>) -> u16 {
-    let data: Vec<u8> = fs::read(path).unwrap();
+fn read_to_mem(path: &str, memory_data: &mut Vec<u16>) -> io::Result<u16> {
+    let data: Vec<u8> = fs::read(path)?;
     let mut cursor = Cursor::new(data);
-
     let origin = cursor.read_u16::<BigEndian>().unwrap();
-
-    // read the program into memory
     let mut address = origin;
     while let Ok(word) = cursor.read_u16::<BigEndian>() {
         memory_data[address as usize] = word;
         address += 1;
     }
-
-    origin
+    Ok(origin)
 }
 
 // Config
@@ -53,7 +49,7 @@ fn parse_config(mut args: impl Iterator<Item = String>) -> Result<Config, &'stat
 
     let path = match args.next() {
         Some(arg) => arg,
-        None => return Err("Path to lc3 obj not specified"),
+        None => return Err("path to lc3 obj not specified"),
     };
 
     Ok(Config::new(path))
@@ -65,9 +61,6 @@ fn main() {
         exit(1);
     });
 
-    enable_raw_mode().unwrap();
-    let _guard = RawModeGuard; // when this gets dropped, raw mode is disabled (including on panic)
-
     let mut register_data = enum_map! {
         // default all registers to 0
         Registers::RCond => CondFlags::Zero as u16,
@@ -77,11 +70,20 @@ fn main() {
     // let mut memory_data: [u16; MEM_SIZE as usize] = [];
     // let mut memory_data: Vec<u16> = Vec::with_capacity(MEM_SIZE as usize);
     let mut memory_data: Vec<u16> = vec![0; MEM_SIZE as usize];
-    register_data[Registers::RProgramCounter] = read_to_mem(&config.path, &mut memory_data);
+    register_data[Registers::RProgramCounter] = match read_to_mem(&config.path, &mut memory_data) {
+        Ok(origin) => origin,
+        _ => {
+            eprintln!("Error: could not read file {}", config.path);
+            exit(1);
+        }
+    };
 
     // for (key, &value) in &register_data {
     //     print!("{:?} has {} as value.\r\n", key, value);
     // }
+
+    enable_raw_mode().unwrap();
+    let _guard = RawModeGuard; // when this gets dropped, raw mode is disabled (including on panic)
 
     loop {
         let op_data = {
@@ -177,7 +179,7 @@ fn main() {
                 let value = mem_read(mem_index, &mut memory_data);
                 let reg = Registers::try_from(dr).unwrap();
                 register_data[reg] = value;
-                update_flags(reg, &mut register_data);
+                update_flags(value, &mut register_data);
             }
             OpCodes::OpLEA => {
                 // load effective addr
@@ -186,7 +188,7 @@ fn main() {
                 let value = register_data[Registers::RProgramCounter].wrapping_add(pc_offset);
                 let reg = Registers::try_from(dr).unwrap();
                 register_data[reg] = value;
-                update_flags(reg, &mut register_data);
+                update_flags(value, &mut register_data);
             }
             OpCodes::OpLDR => {
                 // load base + offset
@@ -205,7 +207,7 @@ fn main() {
                 let dr = (op_data >> 9) & 0b111;
                 let dr = Registers::try_from(dr).unwrap();
                 register_data[dr] = data;
-                update_flags(dr, &mut register_data);
+                update_flags(data, &mut register_data);
 
                 // print!("WROTE VALUE {} TO REG {:?} \r\n", register_data[dr], dr);
             }
@@ -231,7 +233,7 @@ fn main() {
                 let value = mem_read(load_addr, &mut memory_data);
                 let reg = Registers::try_from(dr).unwrap();
                 register_data[reg] = value;
-                update_flags(reg, &mut register_data);
+                update_flags(value, &mut register_data);
             }
             OpCodes::OpTRAP => {
                 // TODO
@@ -333,7 +335,7 @@ fn main() {
                 }
                 let final_reg = Registers::try_from(dr).unwrap();
                 register_data[final_reg] = value;
-                update_flags(final_reg, &mut register_data);
+                update_flags(value, &mut register_data);
 
                 // print!("WROTE VALUE {} TO REG {:?} \r\n", value, final_reg);
             }
@@ -359,7 +361,7 @@ fn main() {
                 }
                 let final_reg = Registers::try_from(dr).unwrap();
                 register_data[final_reg] = value;
-                update_flags(final_reg, &mut register_data);
+                update_flags(value, &mut register_data);
             }
             OpCodes::OpNOT => {
                 /*
@@ -373,8 +375,9 @@ fn main() {
                 let sr = (op_data >> 6) & 0b111;
                 let sr = Registers::try_from(sr).unwrap();
 
-                register_data[dr] = !register_data[sr];
-                update_flags(dr, &mut register_data);
+                let value = !register_data[sr];
+                register_data[dr] = value;
+                update_flags(value, &mut register_data);
             }
             OpCodes::OpSTR => {
                 let sr = (op_data >> 9) & 0b111;

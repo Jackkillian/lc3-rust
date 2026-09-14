@@ -52,14 +52,11 @@ pub fn mem_read(address: u16, memory_data: &mut [u16]) -> u16 {
     memory_data[address as usize]
 }
 
-pub fn update_flags(reg: Registers, register_data: &mut EnumMap<Registers, u16>) {
-    let value = register_data[reg];
-    if (value >> 15) == 1 {
+pub fn update_flags(value: u16, register_data: &mut EnumMap<Registers, u16>) {
+    register_data[Registers::RCond] = match value {
         // negative is MSB is 1
-        register_data[Registers::RCond] = CondFlags::Neg as u16;
-    } else if value == 0 {
-        register_data[Registers::RCond] = CondFlags::Zero as u16;
-    } else {
-        register_data[Registers::RCond] = CondFlags::Pos as u16;
-    }
+        v if (v >> 15) == 1 => CondFlags::Neg,
+        0 => CondFlags::Zero,
+        _ => CondFlags::Pos,
+    } as u16;
 }
