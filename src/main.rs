@@ -13,9 +13,10 @@ use hardware::{
     Registers, TrapCall,
 };
 use std::{
-    fs,
+    env, fs,
     io::{self, Cursor, Write},
     path::Path,
+    process::exit,
     time::Duration,
 };
 
@@ -103,7 +104,33 @@ fn read_to_mem(path: &str, memory_data: &mut Vec<u16>) -> u16 {
     origin
 }
 
+// Config
+struct Config {
+    path: String,
+}
+impl Config {
+    fn new(path: String) -> Self {
+        Config { path }
+    }
+}
+fn parse_config(mut args: impl Iterator<Item = String>) -> Result<Config, &'static str> {
+    // ignore path to binary
+    args.next();
+
+    let path = match args.next() {
+        Some(arg) => arg,
+        None => return Err("Path to lc3 obj not specified"),
+    };
+
+    Ok(Config::new(path))
+}
+
 fn main() {
+    let config = parse_config(env::args()).unwrap_or_else(|err| {
+        eprintln!("Error: {err}");
+        exit(1);
+    });
+
     enable_raw_mode().unwrap();
     let _guard = RawModeGuard; // when this gets dropped, raw mode is disabled (including on panic)
 
@@ -117,7 +144,7 @@ fn main() {
     // let mut memory_data: [u16; MEM_SIZE as usize] = [];
     // let mut memory_data: Vec<u16> = Vec::with_capacity(MEM_SIZE as usize);
     let mut memory_data: Vec<u16> = vec![0; MEM_SIZE as usize];
-    register_data[Registers::RProgramCounter] = read_to_mem("prog/2048.obj", &mut memory_data);
+    register_data[Registers::RProgramCounter] = read_to_mem(&config.path, &mut memory_data);
 
     // for (key, &value) in &register_data {
     //     print!("{:?} has {} as value.\r\n", key, value);
