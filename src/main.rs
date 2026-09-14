@@ -9,8 +9,7 @@ use crossterm::{
 };
 use enum_map::EnumMap;
 use hardware::{
-    CondFlags, DISP_STATUS, KB_DATA, KB_STATUS, MEM_SIZE, OpCodes, PROGRAM_COUNTER_START,
-    Registers, TrapCall,
+    CondFlags, DISP_STATUS, KB_DATA, KB_STATUS, MEM_SIZE, OpCodes, Registers, TrapCall,
 };
 use std::{
     env, fs,
@@ -136,7 +135,6 @@ fn main() {
     let mut register_data = enum_map! {
         // default all registers to 0
         Registers::RCond => CondFlags::Zero as u16,
-        Registers::RProgramCounter => PROGRAM_COUNTER_START,
         _ => 0
     };
 

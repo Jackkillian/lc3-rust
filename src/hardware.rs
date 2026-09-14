@@ -2,7 +2,6 @@ use enum_map::Enum;
 use num_enum::TryFromPrimitive;
 
 pub const MEM_SIZE: u32 = 1 << 16; // 2^16
-pub const PROGRAM_COUNTER_START: u16 = 0x3000;
 
 #[derive(Debug, Enum, TryFromPrimitive, Copy, Clone)]
 #[repr(u16)]
