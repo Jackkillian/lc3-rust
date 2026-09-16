@@ -273,7 +273,17 @@ fn main() {
                                 }
                                 io::stdout().flush().unwrap();
                             }
-                            TrapCall::IN => todo!(),
+                            TrapCall::IN => {
+                                /*
+                                 * Print a prompt on the screen and read a single character from the keyboard. The
+                                 * character is echoed onto the console monitor, and its ASCII code is copied into R0.
+                                 * The high eight bits of R0 are cleared.
+                                 */
+                                print!("Enter a character: ");
+                                let c = get_char();
+                                print!("{}", c);
+                                register_data[Registers::R0] = (c as u16) & 0xFF;
+                            }
                             TrapCall::PUTSP => todo!(),
                         }
                     }
