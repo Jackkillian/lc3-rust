@@ -70,8 +70,6 @@ fn main() {
         _ => 0
     };
 
-    // let mut memory_data: [u16; MEM_SIZE as usize] = [];
-    // let mut memory_data: Vec<u16> = Vec::with_capacity(MEM_SIZE as usize);
     let mut memory_data: Vec<u16> = vec![0; MEM_SIZE as usize];
     register_data[Registers::RProgramCounter] = match read_to_mem(&config.path, &mut memory_data) {
         Ok(origin) => origin,
@@ -95,19 +93,12 @@ fn main() {
             memory_data[pc as usize]
         };
 
-        // both of these should get rid of the first 4 bits
-        // let opcode_args = (op_data & OP_ARG_MASK) as u16;
-        // let opcode_args = ((op_data << 4) >> 4) as u16;
+        // TODO: maybe don't use an enum, just inline bit values
+        let op = OpCodes::try_from(
+            (op_data >> 12) as u8, // op code is the first 4 bits of a 16-bit word
+        )
+        .unwrap();
 
-        let opcode_val = (op_data >> 12) as u8; // op code is the first 4 bits of a 16-bit word
-        let op = OpCodes::try_from(opcode_val).unwrap();
-
-        // print!(
-        //     "\r\nOP DATA 0b{:b}; 0x{:x} -- {:?}\r\n",
-        //     op_data, op_data, op
-        // );
-
-        // https://www.jmeiners.com/lc3-vm/supplies/lc3-isa.pdf
         match op {
             OpCodes::OpBR => {
                 // branch
@@ -192,9 +183,7 @@ fn main() {
                 let baser = Registers::try_from(baser).unwrap();
 
                 let mut address = register_data[baser];
-                // print!("READ VALUE {} FROM BASE REG {:?} \r\n", address, baser);
                 address = address.wrapping_add(offset);
-                // print!("FINAL ADDRESS IS {} AFTER OFFSET {} \r\n", address, offset);
 
                 let data = memory_data[address as usize];
 
@@ -202,15 +191,10 @@ fn main() {
                 let dr = Registers::try_from(dr).unwrap();
                 register_data[dr] = data;
                 update_flags(data, &mut register_data);
-
-                // print!("WROTE VALUE {} TO REG {:?} \r\n", register_data[dr], dr);
             }
             OpCodes::OpSTI => {
-                // println!("STI");
                 let sr = (op_data >> 9) & MASK_REG;
                 let pc_offset = sign_extend(op_data & MASK_SE_9, 9);
-
-                // println!("SR, OFFSET: {}, {}", sr, pc_offset);
 
                 let reg = Registers::try_from(sr).unwrap();
                 let reg_data = register_data[reg];
@@ -233,8 +217,6 @@ fn main() {
                 // TODO
                 register_data[Registers::R7] = register_data[Registers::RProgramCounter];
                 let trapvect8 = op_data & 0xFF; // get last 8 bits of the data
-
-                // print!("TRAP VECT 0x{:x}\r\n", trapvect8);
 
                 let result = TrapCall::try_from(trapvect8);
                 match result {
@@ -329,8 +311,6 @@ fn main() {
                 let final_reg = Registers::try_from(dr).unwrap();
                 register_data[final_reg] = value;
                 update_flags(value, &mut register_data);
-
-                // print!("WROTE VALUE {} TO REG {:?} \r\n", value, final_reg);
             }
             OpCodes::OpAND => {
                 /*
