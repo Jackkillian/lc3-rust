@@ -3,6 +3,12 @@ use crossterm::event::{self, Event, KeyCode, KeyEventKind};
 use enum_map::EnumMap;
 use std::time::Duration;
 
+pub const MASK_REG: u16 = 0b111; // used for registers
+pub const MASK_IMM5: u16 = 0b1_1111; // used for sign-extended 5-bit integers
+pub const MASK_OFFSET6: u16 = 0b11_1111; // used for sign-extended 6-bit integers
+pub const MASK_SE_9: u16 = 0b1_1111_1111; // used for sign-extended 9-bit integers
+pub const MASK_SE_11: u16 = 0b111_1111_1111; // used for sign-extended 11-bit integers
+
 pub fn sign_extend(mut x: u16, bit_count: u32) -> u16 {
     // check if the sign bit (the furthest left/most significant bit) is 1, which means the number
     // is negative

@@ -15,6 +15,8 @@ use std::{
     process::exit,
 };
 
+use crate::utils::{MASK_IMM5, MASK_OFFSET6, MASK_REG, MASK_SE_9, MASK_SE_11};
+
 struct RawModeGuard;
 impl Drop for RawModeGuard {
     fn drop(&mut self) {
@@ -108,32 +110,26 @@ fn main() {
         match op {
             OpCodes::OpBR => {
                 // branch
-                let n = (op_data & 0b0000_1000_0000_0000) != 0;
-                let z = (op_data & 0b0000_0100_0000_0000) != 0;
-                let p = (op_data & 0b0000_0010_0000_0000) != 0;
-                let pc_offset = sign_extend(op_data & 0b0000_0001_1111_1111, 9) as i16;
+                let n = ((op_data >> 11) & 1) != 0;
+                let z = ((op_data >> 10) & 1) != 0;
+                let p = ((op_data >> 9) & 1) != 0;
+                let pc_offset = sign_extend(op_data & MASK_SE_9, 9) as i16;
 
                 // NOTE: this should never throw because this is always set to a flag value
                 let condition_flag = CondFlags::try_from(register_data[Registers::RCond]).unwrap();
-                let do_branch = (n && condition_flag == CondFlags::Neg)
+                if (n && condition_flag == CondFlags::Neg)
                     || (z && condition_flag == CondFlags::Zero)
-                    || (p && condition_flag == CondFlags::Pos);
-                if do_branch
-                // || (!n && !z && !p)
+                    || (p && condition_flag == CondFlags::Pos)
                 {
-                    // println!("DO BRANCH");
                     let current_pc = register_data[Registers::RProgramCounter] as i32;
                     let new_pc = current_pc.wrapping_add(pc_offset as i32) as u16;
                     register_data[Registers::RProgramCounter] = new_pc;
-                    // println!("NEW PC, {}", new_pc)
-                    // register_data[Registers::RProgramCounter] =
-                    //     register_data[Registers::RProgramCounter].wrapping_add(pc_offset);
                 }
             }
             OpCodes::OpJMP => {
                 // jump or return
-                let base_r = (op_data >> 6) & 0b111;
-                if base_r == 0b111 {
+                let base_r = (op_data >> 6) & MASK_REG;
+                if base_r == MASK_REG {
                     // return
                     register_data[Registers::RProgramCounter] = register_data[Registers::R7];
                 } else {
@@ -147,18 +143,18 @@ fn main() {
                 register_data[Registers::R7] = register_data[Registers::RProgramCounter];
                 if mode {
                     // PCOffset
-                    let pc_offset = sign_extend(op_data & 0b0000_0111_1111_1111, 11);
+                    let pc_offset = sign_extend(op_data & MASK_SE_11, 11);
                     let pc = register_data[Registers::RProgramCounter];
                     register_data[Registers::RProgramCounter] = pc.wrapping_add(pc_offset);
                 } else {
                     // BaseR
-                    let reg = Registers::try_from((op_data >> 6) & 0b111).unwrap();
+                    let reg = Registers::try_from((op_data >> 6) & MASK_REG).unwrap();
                     register_data[Registers::RProgramCounter] = register_data[reg];
                 }
             }
             OpCodes::OpST => {
-                let sr = (op_data >> 9) & 0b111;
-                let pc_offset = sign_extend(op_data & 0b0000_0001_1111_1111, 9);
+                let sr = (op_data >> 9) & MASK_REG;
+                let pc_offset = sign_extend(op_data & MASK_SE_9, 9);
                 let reg = Registers::try_from(sr).unwrap();
                 let reg_data = register_data[reg];
                 memory_data
@@ -167,8 +163,8 @@ fn main() {
             }
             OpCodes::OpLDI => {
                 // load indirect
-                let dr = (op_data >> 9) & 0b111;
-                let pc_offset = sign_extend(op_data & 0b0000_0001_1111_1111, 9) as i16;
+                let dr = (op_data >> 9) & MASK_REG;
+                let pc_offset = sign_extend(op_data & MASK_SE_9, 9) as i16;
                 let mem_index = mem_read(
                     register_data[Registers::RProgramCounter].wrapping_add(pc_offset as u16),
                     &mut memory_data,
@@ -180,8 +176,8 @@ fn main() {
             }
             OpCodes::OpLEA => {
                 // load effective addr
-                let dr = (op_data >> 9) & 0b111;
-                let pc_offset = sign_extend(op_data & 0b1_1111_1111, 9);
+                let dr = (op_data >> 9) & MASK_REG;
+                let pc_offset = sign_extend(op_data & MASK_SE_9, 9);
                 let value = register_data[Registers::RProgramCounter].wrapping_add(pc_offset);
                 let reg = Registers::try_from(dr).unwrap();
                 register_data[reg] = value;
@@ -189,9 +185,9 @@ fn main() {
             }
             OpCodes::OpLDR => {
                 // load base + offset
-                let offset = sign_extend(op_data & 0b11_1111, 6);
+                let offset = sign_extend(op_data & MASK_OFFSET6, 6);
 
-                let baser = (op_data >> 6) & 0b111;
+                let baser = (op_data >> 6) & MASK_REG;
                 let baser = Registers::try_from(baser).unwrap();
 
                 let mut address = register_data[baser];
@@ -201,7 +197,7 @@ fn main() {
 
                 let data = memory_data[address as usize];
 
-                let dr = (op_data >> 9) & 0b111;
+                let dr = (op_data >> 9) & MASK_REG;
                 let dr = Registers::try_from(dr).unwrap();
                 register_data[dr] = data;
                 update_flags(data, &mut register_data);
@@ -210,8 +206,8 @@ fn main() {
             }
             OpCodes::OpSTI => {
                 // println!("STI");
-                let sr = (op_data >> 9) & 0b111;
-                let pc_offset = sign_extend(op_data & 0b0000_0001_1111_1111, 9);
+                let sr = (op_data >> 9) & MASK_REG;
+                let pc_offset = sign_extend(op_data & MASK_SE_9, 9);
 
                 // println!("SR, OFFSET: {}, {}", sr, pc_offset);
 
@@ -223,8 +219,8 @@ fn main() {
             }
             OpCodes::OpLD => {
                 // load
-                let dr = (op_data >> 9) & 0b111;
-                let pc_offset = sign_extend(op_data & 0b0000_0001_1111_1111, 9) as i16;
+                let dr = (op_data >> 9) & MASK_REG;
+                let pc_offset = sign_extend(op_data & MASK_SE_9, 9) as i16;
                 let load_addr =
                     register_data[Registers::RProgramCounter].wrapping_add(pc_offset as u16);
                 let value = mem_read(load_addr, &mut memory_data);
@@ -235,7 +231,7 @@ fn main() {
             OpCodes::OpTRAP => {
                 // TODO
                 register_data[Registers::R7] = register_data[Registers::RProgramCounter];
-                let trapvect8 = op_data & 0b0000_0000_1111_1111;
+                let trapvect8 = op_data & 0xFF; // get last 8 bits of the data
 
                 // print!("TRAP VECT 0x{:x}\r\n", trapvect8);
 
@@ -313,17 +309,17 @@ fn main() {
             }
             OpCodes::OpADD => {
                 let mode = ((op_data >> 5) & 0b1) == 1;
-                let dr = (op_data >> 9) & 0b111;
-                let reg1 = register_data[Registers::try_from((op_data >> 6) & 0b111).unwrap()];
+                let dr = (op_data >> 9) & MASK_REG;
+                let reg1 = register_data[Registers::try_from((op_data >> 6) & MASK_REG).unwrap()];
                 let value: u16;
                 if mode {
-                    let imm5 = sign_extend(op_data & 0b1_1111, 5);
+                    let imm5 = sign_extend(op_data & MASK_IMM5, 5);
                     // TODO: getting overflow error here
                     // value = reg1 + imm5;
                     value = reg1.wrapping_add(imm5);
                     // panic!("REG 1: {}, IMM 5: {}, VALUE: {}", reg1, imm5, value);
                 } else {
-                    let reg2 = register_data[Registers::try_from(op_data & 0b111).unwrap()];
+                    let reg2 = register_data[Registers::try_from(op_data & MASK_REG).unwrap()];
                     // TODO: attempt to add with overflow
                     // value = reg1 + reg2;
                     value = reg1.wrapping_add(reg2);
@@ -345,14 +341,14 @@ fn main() {
                  * zero, or positive.
                  */
                 let mode = ((op_data >> 5) & 0b1) == 1;
-                let dr = (op_data >> 9) & 0b111;
-                let reg1 = register_data[Registers::try_from((op_data >> 6) & 0b111).unwrap()];
+                let dr = (op_data >> 9) & MASK_REG;
+                let reg1 = register_data[Registers::try_from((op_data >> 6) & MASK_REG).unwrap()];
                 let value: u16;
                 if mode {
-                    let imm5 = sign_extend(op_data & 0b1_1111, 5);
+                    let imm5 = sign_extend(op_data & MASK_IMM5, 5);
                     value = reg1 & imm5;
                 } else {
-                    let reg2 = register_data[Registers::try_from(op_data & 0b111).unwrap()];
+                    let reg2 = register_data[Registers::try_from(op_data & MASK_REG).unwrap()];
                     value = reg1 & reg2;
                 }
                 let final_reg = Registers::try_from(dr).unwrap();
@@ -365,10 +361,10 @@ fn main() {
                  * The condition codes are set, based on whether the binary value produced, taken as a 2’s
                  * complement integer, is negative, zero, or positive.
                  */
-                let dr = (op_data >> 9) & 0b111;
+                let dr = (op_data >> 9) & MASK_REG;
                 let dr = Registers::try_from(dr).unwrap();
 
-                let sr = (op_data >> 6) & 0b111;
+                let sr = (op_data >> 6) & MASK_REG;
                 let sr = Registers::try_from(sr).unwrap();
 
                 let value = !register_data[sr];
@@ -376,9 +372,9 @@ fn main() {
                 update_flags(value, &mut register_data);
             }
             OpCodes::OpSTR => {
-                let sr = (op_data >> 9) & 0b111;
-                let baser = (op_data >> 6) & 0b111;
-                let offset6 = sign_extend(op_data & 0b11_1111, 6) as i16;
+                let sr = (op_data >> 9) & MASK_REG;
+                let baser = (op_data >> 6) & MASK_REG;
+                let offset6 = sign_extend(op_data & MASK_OFFSET6, 6) as i16;
 
                 let base_reg = Registers::try_from(baser).unwrap();
                 let base_reg_data = register_data[base_reg];
