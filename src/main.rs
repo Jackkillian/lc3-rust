@@ -5,7 +5,10 @@ mod hardware;
 use hardware::{CondFlags, MEM_SIZE, OpCodes, Registers, TrapCall};
 
 mod utils;
-use utils::{get_char, mem_read, sign_extend, update_flags};
+use utils::{
+    MASK_IMM5, MASK_OFFSET6, MASK_REG, MASK_SE_9, MASK_SE_11, get_char, mem_read, sign_extend,
+    update_flags,
+};
 
 use byteorder::{BigEndian, ReadBytesExt};
 use crossterm::terminal::{disable_raw_mode, enable_raw_mode};
@@ -14,8 +17,6 @@ use std::{
     io::{self, Cursor, Write},
     process::exit,
 };
-
-use crate::utils::{MASK_IMM5, MASK_OFFSET6, MASK_REG, MASK_SE_9, MASK_SE_11};
 
 struct RawModeGuard;
 impl Drop for RawModeGuard {
