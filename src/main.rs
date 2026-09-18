@@ -285,7 +285,40 @@ fn main() {
                                 print!("{}\r\n", c as char);
                                 register_data[Registers::R0] = (c as u16) & 0xFF;
                             }
-                            TrapCall::PUTSP => todo!(),
+                            TrapCall::PUTSP => {
+                                /*
+                                 * Write a string of ASCII characters to the console. The characters are contained in
+                                 * consecutive memory locations, two characters per memory location, starting with the
+                                 * address specified in R0. The ASCII code contained in bits [7:0] of a memory location
+                                 * is written to the console first. Then the ASCII code contained in bits [15:8] of that
+                                 * memory location is written to the console. (A character string consisting of an odd
+                                 * number of characters to be written will have x00 in bits [15:8] of the memory
+                                 * location containing the last character to be written.) Writing terminates with the
+                                 * occurrence of x0000 in a memory location.
+                                 */
+                                let mut pointer = register_data[Registers::R0];
+                                loop {
+                                    let data = mem_read(pointer, &mut memory_data);
+                                    if data == 0x0000 {
+                                        break;
+                                    }
+                                    let char1 = (data & 0xFF) as u8 as char;
+                                    let char2 = (data >> 8) as u8 as char;
+                                    // TODO: custom \r\n check because we're in raw mode?
+                                    if char1 == '\n' {
+                                        print!("\r\n");
+                                    } else {
+                                        print!("{}", char1);
+                                    }
+                                    if char2 == '\n' {
+                                        print!("\r\n");
+                                    } else {
+                                        print!("{}", char2);
+                                    }
+                                    pointer = pointer.wrapping_add(1);
+                                }
+                                io::stdout().flush().unwrap();
+                            }
                         }
                     }
                     Err(e) => {
