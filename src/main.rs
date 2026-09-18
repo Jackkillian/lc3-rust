@@ -22,6 +22,7 @@ struct RawModeGuard;
 impl Drop for RawModeGuard {
     fn drop(&mut self) {
         let _ = disable_raw_mode();
+        println!();
     }
 }
 
@@ -255,14 +256,12 @@ fn main() {
                                  * memory location.
                                  */
                                 let mut pointer = register_data[Registers::R0];
-                                // print!("PUTS FROM ADDR {}\r\n", pointer);
                                 loop {
                                     let data = mem_read(pointer, &mut memory_data);
                                     if data == 0x0000 {
                                         break;
                                     }
                                     let c = data as u8 as char;
-                                    // print!("{}", data as u8 as char);
                                     // TODO: custom \r\n check because we're in raw mode?
                                     if c == '\n' {
                                         print!("\r\n");
@@ -279,9 +278,11 @@ fn main() {
                                  * character is echoed onto the console monitor, and its ASCII code is copied into R0.
                                  * The high eight bits of R0 are cleared.
                                  */
-                                print!("Enter a character: ");
+                                print!("Input a character: ");
+                                io::stdout().flush().unwrap();
                                 let c = get_char();
-                                print!("{}", c);
+                                // TODOD: currently appends a newline to match lc3sim
+                                print!("{}\r\n", c as char);
                                 register_data[Registers::R0] = (c as u16) & 0xFF;
                             }
                             TrapCall::PUTSP => todo!(),
@@ -380,6 +381,4 @@ fn main() {
             OpCodes::OpRES => todo!(),
         }
     }
-
-    disable_raw_mode().unwrap();
 }
