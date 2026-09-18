@@ -1,4 +1,6 @@
-use crate::hardware::{CondFlags, DISP_STATUS, KB_DATA, KB_STATUS, Registers};
+use crate::hardware::{
+    CondFlags, DISP_DATA, DISP_STATUS, KB_DATA, KB_STATUS, MACHINE_CTRL, Registers,
+};
 use crossterm::event::{self, Event, KeyCode, KeyEventKind};
 use enum_map::EnumMap;
 use std::time::Duration;
@@ -40,9 +42,7 @@ pub fn get_char() -> u8 {
 }
 
 pub fn mem_read(address: u16, memory_data: &mut [u16]) -> u16 {
-    // print!("MEM READ {:#06X}\r\n", address);
     if address == KB_STATUS {
-        // print!("Reading from keyboard\r\n");
         if check_key() {
             memory_data[KB_STATUS as usize] = 1 << 15; // set MSB
             memory_data[KB_DATA as usize] = get_char() as u16;
@@ -56,6 +56,29 @@ pub fn mem_read(address: u16, memory_data: &mut [u16]) -> u16 {
         memory_data[DISP_STATUS as usize] = 1 << 15; // set MSB
     }
     memory_data[address as usize]
+}
+
+pub fn mem_write(address: u16, memory_data: &mut [u16], data: u16) {
+    // TODO: check if trying to write to an invalid addr
+    match address {
+        DISP_DATA => {
+            /*
+             * Also known as DDR. A character written in the low byte
+             * of this register will be displayed on the screen.
+             */
+            todo!();
+        }
+        MACHINE_CTRL => {
+            /*
+             * Also known as MCR. Bit [15] is the clock enable bit.
+             * When cleared, instruction processing stops.
+             */
+            todo!();
+        }
+        _ => {}
+    }
+
+    memory_data[address as usize] = data;
 }
 
 pub fn update_flags(value: u16, register_data: &mut EnumMap<Registers, u16>) {

@@ -18,6 +18,8 @@ use std::{
     process::exit,
 };
 
+use crate::utils::mem_write;
+
 struct RawModeGuard;
 impl Drop for RawModeGuard {
     fn drop(&mut self) {
@@ -91,7 +93,7 @@ fn main() {
         let op_data = {
             let pc = register_data[Registers::RProgramCounter];
             register_data[Registers::RProgramCounter] = pc.wrapping_add(1);
-            memory_data[pc as usize]
+            mem_read(pc, &mut memory_data)
         };
 
         // TODO: maybe don't use an enum, just inline bit values
@@ -150,9 +152,12 @@ fn main() {
                 let pc_offset = sign_extend(op_data & MASK_SE_9, 9);
                 let reg = Registers::try_from(sr).unwrap();
                 let reg_data = register_data[reg];
-                memory_data
-                    [register_data[Registers::RProgramCounter].wrapping_add(pc_offset) as usize] =
-                    reg_data;
+
+                mem_write(
+                    register_data[Registers::RProgramCounter].wrapping_add(pc_offset),
+                    &mut memory_data,
+                    reg_data,
+                );
             }
             OpCodes::OpLDI => {
                 // load indirect
@@ -186,7 +191,7 @@ fn main() {
                 let mut address = register_data[baser];
                 address = address.wrapping_add(offset);
 
-                let data = memory_data[address as usize];
+                let data = mem_read(address, &mut memory_data);
 
                 let dr = (op_data >> 9) & MASK_REG;
                 let dr = Registers::try_from(dr).unwrap();
@@ -199,9 +204,13 @@ fn main() {
 
                 let reg = Registers::try_from(sr).unwrap();
                 let reg_data = register_data[reg];
-                let mem_index =
-                    memory_data[(register_data[Registers::RProgramCounter] + pc_offset) as usize];
-                memory_data[mem_index as usize] = reg_data;
+
+                let address = mem_read(
+                    register_data[Registers::RProgramCounter] + pc_offset,
+                    &mut memory_data,
+                );
+
+                mem_write(address, &mut memory_data, reg_data);
             }
             OpCodes::OpLD => {
                 // load
@@ -350,7 +359,6 @@ fn main() {
                     // TODO: attempt to add with overflow
                     // value = reg1 + reg2;
                     value = reg1.wrapping_add(reg2);
-                    // panic!("REG 1: {}, REG 2: {}, VALUE: {}", reg1, reg2, value);
                 }
                 let final_reg = Registers::try_from(dr).unwrap();
                 register_data[final_reg] = value;
@@ -399,16 +407,19 @@ fn main() {
             OpCodes::OpSTR => {
                 let sr = (op_data >> 9) & MASK_REG;
                 let baser = (op_data >> 6) & MASK_REG;
-                let offset6 = sign_extend(op_data & MASK_OFFSET6, 6) as i16;
+                let offset6 = sign_extend(op_data & MASK_OFFSET6, 6);
 
                 let base_reg = Registers::try_from(baser).unwrap();
                 let base_reg_data = register_data[base_reg];
 
                 let final_reg = Registers::try_from(sr).unwrap();
                 let final_reg_data = register_data[final_reg];
-                // TODO: i dont think this should be cast again to u16, that just makes it always
-                // positive
-                memory_data[base_reg_data.wrapping_add(offset6 as u16) as usize] = final_reg_data;
+
+                mem_write(
+                    base_reg_data.wrapping_add(offset6),
+                    &mut memory_data,
+                    final_reg_data,
+                );
             }
             OpCodes::OpRTI => todo!(),
             OpCodes::OpRES => todo!(),
