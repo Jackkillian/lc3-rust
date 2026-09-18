@@ -1,7 +1,77 @@
+use byteorder::{BigEndian, ReadBytesExt};
 use enum_map::Enum;
 use num_enum::TryFromPrimitive;
+use std::{
+    fs,
+    io::{self, Cursor},
+};
+
+use crate::utils::{check_key, get_char};
 
 pub const MEM_SIZE: u32 = 1 << 16; // 2^16
+
+pub struct Memory {
+    data: Vec<u16>,
+}
+
+impl Memory {
+    pub fn new() -> Self {
+        Self {
+            data: vec![0; MEM_SIZE as usize],
+        }
+    }
+
+    pub fn read_exec(&mut self, path: &str) -> io::Result<u16> {
+        let data: Vec<u8> = fs::read(path)?;
+        let mut cursor = Cursor::new(data);
+        let origin = cursor.read_u16::<BigEndian>().unwrap();
+        let mut address = origin;
+        while let Ok(word) = cursor.read_u16::<BigEndian>() {
+            self.data[address as usize] = word;
+            address += 1;
+        }
+        Ok(origin)
+    }
+
+    pub fn read(&mut self, address: u16) -> u16 {
+        // TODO: refactor so that there is no mem writing in this fn?
+        if address == KB_STATUS {
+            if check_key() {
+                self.data[KB_STATUS as usize] = 1 << 15; // set MSB
+                self.data[KB_DATA as usize] = get_char() as u16;
+            } else {
+                self.data[KB_STATUS as usize] = 0;
+            }
+        } else if address == DISP_STATUS {
+            // set display status so program knows it can print
+            self.data[DISP_STATUS as usize] = 1 << 15; // set MSB
+        }
+        self.data[address as usize]
+    }
+
+    pub fn write(&mut self, address: u16, data: u16) {
+        // TODO: check if trying to write to an invalid addr
+        match address {
+            DISP_DATA => {
+                /*
+                 * Also known as DDR. A character written in the low byte
+                 * of this register will be displayed on the screen.
+                 */
+                todo!();
+            }
+            MACHINE_CTRL => {
+                /*
+                 * Also known as MCR. Bit [15] is the clock enable bit.
+                 * When cleared, instruction processing stops.
+                 */
+                todo!();
+            }
+            _ => {}
+        }
+
+        self.data[address as usize] = data;
+    }
+}
 
 #[derive(Debug, Enum, TryFromPrimitive, Copy, Clone)]
 #[repr(u16)]

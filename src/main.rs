@@ -2,23 +2,21 @@
 extern crate enum_map;
 
 mod hardware;
-use hardware::{CondFlags, MEM_SIZE, OpCodes, Registers, TrapCall};
+use hardware::{CondFlags, OpCodes, Registers, TrapCall};
 
 mod utils;
 use utils::{
-    MASK_IMM5, MASK_OFFSET6, MASK_REG, MASK_SE_9, MASK_SE_11, get_char, mem_read, sign_extend,
-    update_flags,
+    MASK_IMM5, MASK_OFFSET6, MASK_REG, MASK_SE_9, MASK_SE_11, get_char, sign_extend, update_flags,
 };
 
-use byteorder::{BigEndian, ReadBytesExt};
 use crossterm::terminal::{disable_raw_mode, enable_raw_mode};
 use std::{
-    env, fs,
-    io::{self, Cursor, Write},
+    env,
+    io::{self, Write},
     process::exit,
 };
 
-use crate::utils::mem_write;
+use crate::hardware::Memory;
 
 struct RawModeGuard;
 impl Drop for RawModeGuard {
@@ -26,18 +24,6 @@ impl Drop for RawModeGuard {
         let _ = disable_raw_mode();
         println!();
     }
-}
-
-fn read_to_mem(path: &str, memory_data: &mut Vec<u16>) -> io::Result<u16> {
-    let data: Vec<u8> = fs::read(path)?;
-    let mut cursor = Cursor::new(data);
-    let origin = cursor.read_u16::<BigEndian>().unwrap();
-    let mut address = origin;
-    while let Ok(word) = cursor.read_u16::<BigEndian>() {
-        memory_data[address as usize] = word;
-        address += 1;
-    }
-    Ok(origin)
 }
 
 // Config
@@ -73,8 +59,8 @@ fn main() {
         _ => 0
     };
 
-    let mut memory_data: Vec<u16> = vec![0; MEM_SIZE as usize];
-    register_data[Registers::RProgramCounter] = match read_to_mem(&config.path, &mut memory_data) {
+    let mut memory = Memory::new();
+    register_data[Registers::RProgramCounter] = match memory.read_exec(&config.path) {
         Ok(origin) => origin,
         _ => {
             eprintln!("Error: could not read file {}", config.path);
@@ -93,7 +79,7 @@ fn main() {
         let op_data = {
             let pc = register_data[Registers::RProgramCounter];
             register_data[Registers::RProgramCounter] = pc.wrapping_add(1);
-            mem_read(pc, &mut memory_data)
+            memory.read(pc)
         };
 
         // TODO: maybe don't use an enum, just inline bit values
@@ -153,9 +139,8 @@ fn main() {
                 let reg = Registers::try_from(sr).unwrap();
                 let reg_data = register_data[reg];
 
-                mem_write(
+                memory.write(
                     register_data[Registers::RProgramCounter].wrapping_add(pc_offset),
-                    &mut memory_data,
                     reg_data,
                 );
             }
@@ -163,11 +148,9 @@ fn main() {
                 // load indirect
                 let dr = (op_data >> 9) & MASK_REG;
                 let pc_offset = sign_extend(op_data & MASK_SE_9, 9) as i16;
-                let mem_index = mem_read(
-                    register_data[Registers::RProgramCounter].wrapping_add(pc_offset as u16),
-                    &mut memory_data,
-                );
-                let value = mem_read(mem_index, &mut memory_data);
+                let mem_index = memory
+                    .read(register_data[Registers::RProgramCounter].wrapping_add(pc_offset as u16));
+                let value = memory.read(mem_index);
                 let reg = Registers::try_from(dr).unwrap();
                 register_data[reg] = value;
                 update_flags(value, &mut register_data);
@@ -191,7 +174,7 @@ fn main() {
                 let mut address = register_data[baser];
                 address = address.wrapping_add(offset);
 
-                let data = mem_read(address, &mut memory_data);
+                let data = memory.read(address);
 
                 let dr = (op_data >> 9) & MASK_REG;
                 let dr = Registers::try_from(dr).unwrap();
@@ -205,12 +188,9 @@ fn main() {
                 let reg = Registers::try_from(sr).unwrap();
                 let reg_data = register_data[reg];
 
-                let address = mem_read(
-                    register_data[Registers::RProgramCounter] + pc_offset,
-                    &mut memory_data,
-                );
+                let address = memory.read(register_data[Registers::RProgramCounter] + pc_offset);
 
-                mem_write(address, &mut memory_data, reg_data);
+                memory.write(address, reg_data);
             }
             OpCodes::OpLD => {
                 // load
@@ -218,7 +198,7 @@ fn main() {
                 let pc_offset = sign_extend(op_data & MASK_SE_9, 9) as i16;
                 let load_addr =
                     register_data[Registers::RProgramCounter].wrapping_add(pc_offset as u16);
-                let value = mem_read(load_addr, &mut memory_data);
+                let value = memory.read(load_addr);
                 let reg = Registers::try_from(dr).unwrap();
                 register_data[reg] = value;
                 update_flags(value, &mut register_data);
@@ -266,7 +246,7 @@ fn main() {
                                  */
                                 let mut pointer = register_data[Registers::R0];
                                 loop {
-                                    let data = mem_read(pointer, &mut memory_data);
+                                    let data = memory.read(pointer);
                                     if data == 0x0000 {
                                         break;
                                     }
@@ -307,7 +287,7 @@ fn main() {
                                  */
                                 let mut pointer = register_data[Registers::R0];
                                 loop {
-                                    let data = mem_read(pointer, &mut memory_data);
+                                    let data = memory.read(pointer);
                                     if data == 0x0000 {
                                         break;
                                     }
@@ -415,11 +395,7 @@ fn main() {
                 let final_reg = Registers::try_from(sr).unwrap();
                 let final_reg_data = register_data[final_reg];
 
-                mem_write(
-                    base_reg_data.wrapping_add(offset6),
-                    &mut memory_data,
-                    final_reg_data,
-                );
+                memory.write(base_reg_data.wrapping_add(offset6), final_reg_data);
             }
             OpCodes::OpRTI => todo!(),
             OpCodes::OpRES => todo!(),
