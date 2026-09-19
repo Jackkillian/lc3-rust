@@ -21,7 +21,7 @@ impl Memory {
         }
     }
 
-    pub fn read_exec(&mut self, path: &str) -> io::Result<u16> {
+    pub fn read_file(&mut self, path: &str) -> io::Result<u16> {
         let data: Vec<u8> = fs::read(path)?;
         let mut cursor = Cursor::new(data);
         let origin = cursor.read_u16::<BigEndian>().unwrap();
